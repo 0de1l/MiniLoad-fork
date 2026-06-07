@@ -182,6 +182,10 @@ const createDefaultBookData = (): BookData => ({
     enabled: true,
 });
 
+const sidebarMotion = 'duration-500 ease-[cubic-bezier(.22,1,.36,1)]';
+const navItemMotion = `transition-[background-color,border-color,color,padding,transform] ${sidebarMotion}`;
+const sidebarTextMotion = `overflow-hidden whitespace-nowrap transition-[opacity,transform,max-width] ${sidebarMotion}`;
+
 const getListTitle = (item: AdminItem, value: AdminType) => {
     if (value === 'daily') return item.date;
     if (value === 'comment') return item.content;
@@ -903,12 +907,12 @@ export default function AdminPage() {
         <div className="flex h-screen bg-neutral-950 text-neutral-200 font-sans selection:bg-white selection:text-black overflow-hidden">
             <aside
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className={`${isSidebarCollapsed ? 'w-16' : 'w-60'} border-r border-neutral-900 bg-neutral-950 flex flex-col h-full transition-all duration-300 relative group cursor-pointer`}
+                className={`${isSidebarCollapsed ? 'w-16' : 'w-60'} border-r border-neutral-900 bg-neutral-950 flex flex-col h-full transition-[width] ${sidebarMotion} relative group cursor-pointer will-change-[width]`}
             >
                 <div className="p-4" onClick={(e) => e.stopPropagation()}>
                     <nav className="space-y-1">
                         {!isSidebarCollapsed && (
-                            <Label className="text-[9px] text-neutral-600 uppercase tracking-widest px-2 font-mono mb-2 block animate-in fade-in duration-300">Content Type</Label>
+                            <Label className={`text-[9px] text-neutral-600 uppercase tracking-widest px-2 font-mono mb-2 block ${sidebarTextMotion} opacity-100 translate-x-0 max-w-40`}>Content Type</Label>
                         )}
                         {(['dashboard'] as const).map((t) => (
                             <button
@@ -919,7 +923,7 @@ export default function AdminPage() {
                                     setType(t);
                                     setViewMode('list');
                                 }}
-                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs transition-all cursor-pointer ${type === t
+                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs ${navItemMotion} cursor-pointer ${type === t
                                     ? 'bg-neutral-900 text-white shadow-sm border border-neutral-800'
                                     : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
                                     }`}
@@ -927,7 +931,7 @@ export default function AdminPage() {
                                 <span className={`p-1 rounded text-[10px] shrink-0 ${type === t ? 'bg-neutral-950 text-white shadow-inner' : 'bg-transparent text-neutral-600'}`}>
                                     <FiBarChart2 className="w-3 h-3" />
                                 </span>
-                                {!isSidebarCollapsed && <span className="font-medium tracking-wide truncate animate-in fade-in duration-300">Dashboard</span>}
+                                {!isSidebarCollapsed && <span className={`${sidebarTextMotion} font-medium tracking-wide truncate opacity-100 translate-x-0 max-w-32`}>Dashboard</span>}
                                 {!isSidebarCollapsed && type === t && <FiCheck className="ml-auto w-3 h-3 text-neutral-500 shrink-0" />}
                             </button>
                         ))}
@@ -938,7 +942,7 @@ export default function AdminPage() {
                                     e.stopPropagation();
                                     setIsHomePageOpen((value) => !value);
                                 }}
-                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs transition-all cursor-pointer ${isHomePageType(type)
+                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs ${navItemMotion} cursor-pointer ${isHomePageType(type)
                                     ? 'bg-neutral-900 text-white shadow-sm border border-neutral-800'
                                     : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
                                     }`}
@@ -946,14 +950,14 @@ export default function AdminPage() {
                                 <span className={`p-1 rounded text-[10px] shrink-0 ${isHomePageType(type) ? 'bg-neutral-950 text-white shadow-inner' : 'bg-transparent text-neutral-600'}`}>
                                     <FiHome className="w-3 h-3" />
                                 </span>
-                                {!isSidebarCollapsed && <span className="font-medium tracking-wide truncate animate-in fade-in duration-300">HomePage</span>}
+                                {!isSidebarCollapsed && <span className={`${sidebarTextMotion} font-medium tracking-wide truncate opacity-100 translate-x-0 max-w-32`}>HomePage</span>}
                                 {!isSidebarCollapsed && (
-                                    <FiChevronDown className={`ml-auto w-3 h-3 text-neutral-500 transition-transform ${isHomePageOpen ? 'rotate-180' : ''}`} />
+                                    <FiChevronDown className={`ml-auto w-3 h-3 text-neutral-500 transition-transform ${sidebarMotion} ${isHomePageOpen ? 'rotate-180' : ''}`} />
                                 )}
                             </button>
 
                             {!isSidebarCollapsed && isHomePageOpen && (
-                                <div className="ml-7 space-y-1 border-l border-neutral-900 pl-2">
+                                <div className={`ml-7 space-y-1 overflow-hidden border-l border-neutral-900 pl-2 transition-[opacity,transform,max-height] ${sidebarMotion} opacity-100 translate-y-0 max-h-24`}>
                                     {(['homepage-tool', 'homepage-book'] as const).map((t) => (
                                         <button
                                             key={t}
@@ -963,7 +967,7 @@ export default function AdminPage() {
                                                 setType(t);
                                                 setViewMode('list');
                                             }}
-                                            className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-xs transition-all cursor-pointer ${type === t
+                                            className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-xs ${navItemMotion} cursor-pointer ${type === t
                                                 ? 'bg-neutral-900 text-white'
                                                 : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
                                                 }`}
@@ -986,7 +990,7 @@ export default function AdminPage() {
                                     setType(t);
                                     setViewMode('list');
                                 }}
-                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs transition-all cursor-pointer ${type === t
+                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs ${navItemMotion} cursor-pointer ${type === t
                                     ? 'bg-neutral-900 text-white shadow-sm border border-neutral-800'
                                     : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
                                     }`}
@@ -999,7 +1003,7 @@ export default function AdminPage() {
                                 </span>
 
                                 {!isSidebarCollapsed && (
-                                    <span className="font-medium tracking-wide truncate animate-in fade-in duration-300">{getTypeLabel(t)}</span>
+                                    <span className={`${sidebarTextMotion} font-medium tracking-wide truncate opacity-100 translate-x-0 max-w-32`}>{getTypeLabel(t)}</span>
                                 )}
                                 {!isSidebarCollapsed && type === t && <FiCheck className="ml-auto w-3 h-3 text-neutral-500 shrink-0" />}
                             </button>
@@ -1009,16 +1013,16 @@ export default function AdminPage() {
                 <div className="mt-auto p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
                     <Separator className="bg-neutral-900" />
                     <nav className="space-y-1">
-                        <Link href="/" className={`flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 text-xs text-neutral-500 hover:text-white transition-colors group rounded-md hover:bg-neutral-900/50 cursor-pointer`}>
+                        <Link href="/" className={`flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 text-xs text-neutral-500 hover:text-white ${navItemMotion} group rounded-md hover:bg-neutral-900/50 cursor-pointer`}>
                             <FiHome className="w-3.5 h-3.5 group-hover:scale-105 transition-transform shrink-0" />
-                            {!isSidebarCollapsed && <span className="animate-in fade-in duration-300">View Site</span>}
+                            {!isSidebarCollapsed && <span className={`${sidebarTextMotion} opacity-100 translate-x-0 max-w-32`}>View Site</span>}
                         </Link>
                         <button
                             onClick={(e) => { e.stopPropagation(); localStorage.removeItem('admin_key'); window.location.reload(); }}
-                            className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 text-xs text-red-500/60 hover:text-red-500 transition-colors group rounded-md hover:bg-red-950/20 cursor-pointer`}
+                            className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 text-xs text-red-500/60 hover:text-red-500 ${navItemMotion} group rounded-md hover:bg-red-950/20 cursor-pointer`}
                         >
                             <FiLogOut className="w-3.5 h-3.5 shrink-0" />
-                            {!isSidebarCollapsed && <span className="animate-in fade-in duration-300">Logout</span>}
+                            {!isSidebarCollapsed && <span className={`${sidebarTextMotion} opacity-100 translate-x-0 max-w-32`}>Logout</span>}
                         </button>
                     </nav>
                 </div>
