@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useDeferredValue, useRef } from 'react';
 import Link from 'next/link';
 import {
     FiSave,
@@ -32,6 +32,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { homeToolIconOptions, HomeToolIcon } from "@/lib/home-module-types";
+import MarkdownContent from "@/components/markdown-content";
+import { renderMarkdownPreviewHtml } from "@/lib/markdown-preview";
 
 type AdminType = 'dashboard' | 'homepage-tool' | 'homepage-book' | 'post' | 'daily' | 'moment' | 'comment';
 
@@ -364,58 +366,6 @@ function DashboardView({
     );
 }
 
-const escapeHtml = (value: string) => {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-};
-
-const renderInlineMarkdown = (value: string) => {
-    return escapeHtml(value)
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />')
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-};
-
-const renderMarkdownPreview = (markdown: string) => {
-    if (!markdown.trim()) {
-        return '<p class="text-neutral-600 font-mono text-xs uppercase tracking-widest">Preview_Waiting_For_Input</p>';
-    }
-
-    const blocks = markdown.split(/\n{2,}/);
-
-    return blocks.map((block) => {
-        const trimmed = block.trim();
-        if (!trimmed) return '';
-
-        if (trimmed.startsWith('```')) {
-            const code = trimmed.replace(/^```[a-zA-Z0-9_-]*\n?/, '').replace(/```$/, '');
-            return `<pre><code>${escapeHtml(code)}</code></pre>`;
-        }
-
-        if (trimmed.startsWith('# ')) return `<h1>${renderInlineMarkdown(trimmed.slice(2))}</h1>`;
-        if (trimmed.startsWith('## ')) return `<h2>${renderInlineMarkdown(trimmed.slice(3))}</h2>`;
-        if (trimmed.startsWith('### ')) return `<h3>${renderInlineMarkdown(trimmed.slice(4))}</h3>`;
-
-        if (trimmed.startsWith('>')) {
-            const quote = trimmed.split('\n').map(line => line.replace(/^>\s?/, '')).join('<br />');
-            return `<blockquote><p>${renderInlineMarkdown(quote)}</p></blockquote>`;
-        }
-
-        if (/^- /.test(trimmed)) {
-            const items = trimmed.split('\n').map(line => `<li>${renderInlineMarkdown(line.replace(/^- /, ''))}</li>`).join('');
-            return `<ul>${items}</ul>`;
-        }
-
-        return `<p>${renderInlineMarkdown(trimmed).replace(/\n/g, '<br />')}</p>`;
-    }).join('');
-};
-
 export default function AdminPage() {
     const postContentRef = useRef<HTMLTextAreaElement | null>(null);
     const postPreviewRef = useRef<HTMLDivElement | null>(null);
@@ -434,6 +384,8 @@ export default function AdminPage() {
     const defaultSlug = today.replace(/-/g, '').slice(2); // YYMMDD
 
     const [postData, setPostData] = useState<PostData>({ title: '', date: today, description: '', content: '', slug: defaultSlug, category: '' });
+    const deferredPostContent = useDeferredValue(postData.content);
+    const [postPreviewHtml, setPostPreviewHtml] = useState('');
     const [isSlugModified, setIsSlugModified] = useState(false);
     const [dailyData, setDailyData] = useState<DailyData>({ date: today, imageUrl: '', content: '' });
     const [momentData, setMomentData] = useState<MomentData>({ title: '', date: today, imageUrl: '', content: '' });
@@ -582,6 +534,27 @@ export default function AdminPage() {
             fetchPosts();
         }
     }, [viewMode, isAuthorized, fetchPosts]);
+
+    useEffect(() => {
+        if (type !== 'post' || viewMode !== 'edit') return;
+
+        let cancelled = false;
+
+        renderMarkdownPreviewHtml(deferredPostContent)
+            .then((html) => {
+                if (!cancelled) setPostPreviewHtml(html);
+            })
+            .catch((error) => {
+                console.error('Failed to render markdown preview', error);
+                if (!cancelled) {
+                    setPostPreviewHtml('<p class="text-red-400 font-mono text-xs uppercase tracking-widest">Preview_Render_Error</p>');
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [deferredPostContent, type, viewMode]);
 
     const handleEditPost = (item: AdminItem) => {
         if (type === 'post') {
@@ -1242,10 +1215,10 @@ export default function AdminPage() {
                                                     </div>
                                                     <div className="flex h-[602px] flex-col bg-[#111]">
                                                         <div className="border-b border-neutral-900 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.2em] text-neutral-600">Rendered_Preview</div>
-                                                        <div
+                                                        <MarkdownContent
                                                             ref={postPreviewRef}
                                                             className="prose prose-invert max-w-none flex-1 overflow-y-auto p-5 text-sm"
-                                                            dangerouslySetInnerHTML={{ __html: renderMarkdownPreview(postData.content) }}
+                                                            html={postPreviewHtml}
                                                         />
                                                     </div>
                                                 </div>

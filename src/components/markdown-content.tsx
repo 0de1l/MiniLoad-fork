@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 type MarkdownContentProps = {
   html: string;
@@ -36,8 +36,13 @@ function getCodeLanguage(pre: HTMLPreElement, code: HTMLElement) {
   return LANGUAGE_LABELS[language] ?? language;
 }
 
-export default function MarkdownContent({ html, className = '' }: MarkdownContentProps) {
+const MarkdownContent = forwardRef<HTMLDivElement, MarkdownContentProps>(function MarkdownContent(
+  { html, className = '' },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useImperativeHandle(ref, () => containerRef.current as HTMLDivElement);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -135,4 +140,6 @@ export default function MarkdownContent({ html, className = '' }: MarkdownConten
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
-}
+});
+
+export default MarkdownContent;
