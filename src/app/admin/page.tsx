@@ -16,10 +16,13 @@ import {
     FiList,
     FiTrash2,
     FiChevronRight,
+    FiChevronDown,
     FiMessageSquare,
     FiCornerUpLeft,
     FiBarChart2,
-    FiTrendingUp
+    FiTrendingUp,
+    FiBookOpen,
+    FiTool
 } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
@@ -28,8 +31,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { homeToolIconOptions, HomeToolIcon } from "@/lib/home-module-types";
 
-type AdminType = 'dashboard' | 'post' | 'daily' | 'moment' | 'comment';
+type AdminType = 'dashboard' | 'homepage-tool' | 'homepage-book' | 'post' | 'daily' | 'moment' | 'comment';
 
 
 type PostData = {
@@ -54,6 +58,23 @@ type MomentData = {
     content: string;
 };
 
+type ToolData = {
+    name: string;
+    description: string;
+    link: string;
+    icon: HomeToolIcon;
+    sortOrder: number;
+    enabled: boolean;
+};
+
+type BookData = {
+    title: string;
+    cover: string;
+    hoverText: string;
+    sortOrder: number;
+    enabled: boolean;
+};
+
 type AdminItem = {
     filename: string;
     date: string;
@@ -67,6 +88,14 @@ type AdminItem = {
     contact?: string;
     articleTitle?: string;
     created_at?: string;
+    id?: number;
+    name?: string;
+    link?: string;
+    icon?: HomeToolIcon;
+    sortOrder?: number;
+    enabled?: boolean;
+    cover?: string;
+    hoverText?: string;
 };
 
 type StatusMessage = { text: string; isError: boolean };
@@ -117,6 +146,64 @@ const buildDateRange = (days: number) => {
 };
 
 const formatMetric = (value: number) => new Intl.NumberFormat('en-US').format(value);
+
+const isHomePageType = (value: AdminType) => value === 'homepage-tool' || value === 'homepage-book';
+
+const getHomeItemType = (value: AdminType) => value === 'homepage-book' ? 'book' : 'tool';
+
+const getTypeLabel = (value: AdminType) => {
+    const labels: Record<AdminType, string> = {
+        dashboard: 'Dashboard',
+        'homepage-tool': 'Tools',
+        'homepage-book': 'Books',
+        post: 'Post',
+        daily: 'Daily',
+        moment: 'Moment',
+        comment: 'Comment',
+    };
+
+    return labels[value];
+};
+
+const createDefaultToolData = (): ToolData => ({
+    name: '',
+    description: '',
+    link: '',
+    icon: 'file',
+    sortOrder: 0,
+    enabled: true,
+});
+
+const createDefaultBookData = (): BookData => ({
+    title: '',
+    cover: '',
+    hoverText: '',
+    sortOrder: 0,
+    enabled: true,
+});
+
+const getListTitle = (item: AdminItem, value: AdminType) => {
+    if (value === 'daily') return item.date;
+    if (value === 'comment') return item.content;
+    if (value === 'homepage-tool') return item.name || item.title;
+    return item.title;
+};
+
+const getListDescription = (item: AdminItem, value: AdminType) => {
+    if (value === 'post') return item.description || '...';
+    if (value === 'comment') return '';
+    if (value === 'homepage-tool') return item.description || item.link || '...';
+    if (value === 'homepage-book') return item.hoverText || item.cover || '...';
+    return item.content ? item.content.substring(0, 60) : '...';
+};
+
+const getListMeta = (item: AdminItem, value: AdminType) => {
+    if (isHomePageType(value)) {
+        return `SORT:${item.sortOrder ?? 0} / ${item.enabled === false ? 'OFF' : 'ON'}`;
+    }
+
+    return item.date || item.created_at;
+};
 
 const getItemTextLength = (item: AdminItem) => {
     return [item.title, item.description, item.content]
@@ -345,6 +432,8 @@ export default function AdminPage() {
     const [isSlugModified, setIsSlugModified] = useState(false);
     const [dailyData, setDailyData] = useState<DailyData>({ date: today, imageUrl: '', content: '' });
     const [momentData, setMomentData] = useState<MomentData>({ title: '', date: today, imageUrl: '', content: '' });
+    const [toolData, setToolData] = useState<ToolData>(createDefaultToolData());
+    const [bookData, setBookData] = useState<BookData>(createDefaultBookData());
     const [existingPosts, setExistingPosts] = useState<AdminItem[]>([]);
     const [dashboardData, setDashboardData] = useState<DashboardData>({ posts: [], daily: [], moments: [], analytics: buildEmptyAnalytics() });
     const [dashboardLoading, setDashboardLoading] = useState(false);
@@ -352,6 +441,7 @@ export default function AdminPage() {
     const [currentFilename, setCurrentFilename] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'edit' | 'list'>('list');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [isHomePageOpen, setIsHomePageOpen] = useState(true);
 
     // Delete Confirmation State
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -443,7 +533,10 @@ export default function AdminPage() {
         try {
             const adminKey = token || localStorage.getItem('admin_key') || '';
             setListLoading(true);
-            const res = await fetch(`/api/admin/list?type=${type}`, {
+            const listUrl = isHomePageType(type)
+                ? `/api/admin/home-items?type=${getHomeItemType(type)}`
+                : `/api/admin/list?type=${type}`;
+            const res = await fetch(listUrl, {
                 headers: { 'Authorization': adminKey }
             });
             if (res.ok) {
@@ -508,6 +601,23 @@ export default function AdminPage() {
                 imageUrl: item.imageUrl || '',
                 content: item.content || ''
             });
+        } else if (type === 'homepage-tool') {
+            setToolData({
+                name: item.name || item.title || '',
+                description: item.description || '',
+                link: item.link || '',
+                icon: item.icon || 'file',
+                sortOrder: Number(item.sortOrder) || 0,
+                enabled: item.enabled !== false,
+            });
+        } else if (type === 'homepage-book') {
+            setBookData({
+                title: item.title || '',
+                cover: item.cover || '',
+                hoverText: item.hoverText || '',
+                sortOrder: Number(item.sortOrder) || 0,
+                enabled: item.enabled !== false,
+            });
         }
 
         setCurrentFilename(item.filename);
@@ -533,6 +643,16 @@ export default function AdminPage() {
             setViewMode('edit');
         } else if (type === 'moment') {
             setMomentData({ title: '', date: today, imageUrl: '', content: '' });
+            setIsEditing(false);
+            setCurrentFilename(null);
+            setViewMode('edit');
+        } else if (type === 'homepage-tool') {
+            setToolData(createDefaultToolData());
+            setIsEditing(false);
+            setCurrentFilename(null);
+            setViewMode('edit');
+        } else if (type === 'homepage-book') {
+            setBookData(createDefaultBookData());
             setIsEditing(false);
             setCurrentFilename(null);
             setViewMode('edit');
@@ -573,16 +693,19 @@ export default function AdminPage() {
         }
         else if (type === 'daily') data = dailyData;
         else if (type === 'moment') data = momentData;
+        else if (type === 'homepage-tool') data = { ...toolData, id: currentFilename ? Number(currentFilename) : undefined };
+        else if (type === 'homepage-book') data = { ...bookData, id: currentFilename ? Number(currentFilename) : undefined };
 
         try {
             const adminKey = localStorage.getItem('admin_key') || '';
-            const res = await fetch('/api/admin/save', {
+            const isHomeItem = isHomePageType(type);
+            const res = await fetch(isHomeItem ? '/api/admin/home-items' : '/api/admin/save', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': adminKey
                 },
-                body: JSON.stringify({ type, data }),
+                body: JSON.stringify({ type: isHomeItem ? getHomeItemType(type) : type, data }),
             });
 
             if (res.status === 401) {
@@ -601,6 +724,20 @@ export default function AdminPage() {
                 }
                 else if (type === 'daily') setDailyData({ date: today, imageUrl: '', content: '' });
                 else if (type === 'moment') setMomentData({ title: '', date: today, imageUrl: '', content: '' });
+                else if (type === 'homepage-tool') {
+                    setToolData(createDefaultToolData());
+                    setCurrentFilename(null);
+                    setIsEditing(false);
+                    setViewMode('list');
+                    fetchPosts();
+                }
+                else if (type === 'homepage-book') {
+                    setBookData(createDefaultBookData());
+                    setCurrentFilename(null);
+                    setIsEditing(false);
+                    setViewMode('list');
+                    fetchPosts();
+                }
 
                 setTimeout(() => setMessage(null), 3000);
             } else {
@@ -664,16 +801,16 @@ export default function AdminPage() {
         setLoading(true);
         try {
             const adminKey = localStorage.getItem('admin_key') || '';
-            const res = await fetch('/api/admin/delete', {
+            const isHomeItem = isHomePageType(targetType);
+            const res = await fetch(isHomeItem ? '/api/admin/home-items' : '/api/admin/delete', {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': adminKey
                 },
-                body: JSON.stringify({
-                    type: targetType,
-                    filename: filename
-                })
+                body: JSON.stringify(isHomeItem
+                    ? { type: getHomeItemType(targetType), id: Number(filename) }
+                    : { type: targetType, filename })
             });
 
             if (res.ok) {
@@ -760,24 +897,88 @@ export default function AdminPage() {
                         {!isSidebarCollapsed && (
                             <Label className="text-[9px] text-neutral-600 uppercase tracking-widest px-2 font-mono mb-2 block animate-in fade-in duration-300">Content Type</Label>
                         )}
-                        {(['dashboard', 'post', 'daily', 'moment', 'comment'] as const).map((t) => (
-
+                        {(['dashboard'] as const).map((t) => (
                             <button
                                 key={t}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setExistingPosts([]); // 立即清空，防止闪烁
+                                    setExistingPosts([]);
                                     setType(t);
                                     setViewMode('list');
                                 }}
-
                                 className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs transition-all cursor-pointer ${type === t
                                     ? 'bg-neutral-900 text-white shadow-sm border border-neutral-800'
                                     : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
                                     }`}
                             >
                                 <span className={`p-1 rounded text-[10px] shrink-0 ${type === t ? 'bg-neutral-950 text-white shadow-inner' : 'bg-transparent text-neutral-600'}`}>
-                                    {t === 'dashboard' && <FiBarChart2 className="w-3 h-3" />}
+                                    <FiBarChart2 className="w-3 h-3" />
+                                </span>
+                                {!isSidebarCollapsed && <span className="font-medium tracking-wide truncate animate-in fade-in duration-300">Dashboard</span>}
+                                {!isSidebarCollapsed && type === t && <FiCheck className="ml-auto w-3 h-3 text-neutral-500 shrink-0" />}
+                            </button>
+                        ))}
+
+                        <div className="space-y-1">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsHomePageOpen((value) => !value);
+                                }}
+                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs transition-all cursor-pointer ${isHomePageType(type)
+                                    ? 'bg-neutral-900 text-white shadow-sm border border-neutral-800'
+                                    : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
+                                    }`}
+                            >
+                                <span className={`p-1 rounded text-[10px] shrink-0 ${isHomePageType(type) ? 'bg-neutral-950 text-white shadow-inner' : 'bg-transparent text-neutral-600'}`}>
+                                    <FiHome className="w-3 h-3" />
+                                </span>
+                                {!isSidebarCollapsed && <span className="font-medium tracking-wide truncate animate-in fade-in duration-300">HomePage</span>}
+                                {!isSidebarCollapsed && (
+                                    <FiChevronDown className={`ml-auto w-3 h-3 text-neutral-500 transition-transform ${isHomePageOpen ? 'rotate-180' : ''}`} />
+                                )}
+                            </button>
+
+                            {!isSidebarCollapsed && isHomePageOpen && (
+                                <div className="ml-7 space-y-1 border-l border-neutral-900 pl-2">
+                                    {(['homepage-tool', 'homepage-book'] as const).map((t) => (
+                                        <button
+                                            key={t}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setExistingPosts([]);
+                                                setType(t);
+                                                setViewMode('list');
+                                            }}
+                                            className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-xs transition-all cursor-pointer ${type === t
+                                                ? 'bg-neutral-900 text-white'
+                                                : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
+                                                }`}
+                                        >
+                                            {t === 'homepage-tool' ? <FiTool className="w-3 h-3" /> : <FiBookOpen className="w-3 h-3" />}
+                                            <span>{t === 'homepage-tool' ? 'Tools' : 'Books'}</span>
+                                            {type === t && <FiCheck className="ml-auto w-3 h-3 text-neutral-500 shrink-0" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {(['post', 'daily', 'moment', 'comment'] as const).map((t) => (
+                            <button
+                                key={t}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExistingPosts([]);
+                                    setType(t);
+                                    setViewMode('list');
+                                }}
+                                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3'} py-2 rounded-md text-xs transition-all cursor-pointer ${type === t
+                                    ? 'bg-neutral-900 text-white shadow-sm border border-neutral-800'
+                                    : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
+                                    }`}
+                            >
+                                <span className={`p-1 rounded text-[10px] shrink-0 ${type === t ? 'bg-neutral-950 text-white shadow-inner' : 'bg-transparent text-neutral-600'}`}>
                                     {t === 'post' && <FiEdit3 className="w-3 h-3" />}
                                     {t === 'daily' && <FiTerminal className="w-3 h-3" />}
                                     {t === 'moment' && <FiImage className="w-3 h-3" />}
@@ -785,7 +986,7 @@ export default function AdminPage() {
                                 </span>
 
                                 {!isSidebarCollapsed && (
-                                    <span className="font-medium capitalize tracking-wide truncate animate-in fade-in duration-300">{t}</span>
+                                    <span className="font-medium tracking-wide truncate animate-in fade-in duration-300">{getTypeLabel(t)}</span>
                                 )}
                                 {!isSidebarCollapsed && type === t && <FiCheck className="ml-auto w-3 h-3 text-neutral-500 shrink-0" />}
                             </button>
@@ -818,14 +1019,14 @@ export default function AdminPage() {
                                 {type === 'dashboard'
                                     ? 'Dashboard'
                                     : viewMode === 'list'
-                                    ? `${type} Library`
-                                    : (isEditing && type === 'post' ? 'Edit Post' : (type === 'comment' ? 'Comment Management' : `New ${type}`))}
+                                    ? `${getTypeLabel(type)} Library`
+                                    : (isEditing ? `Edit ${getTypeLabel(type)}` : (type === 'comment' ? 'Comment Management' : `New ${getTypeLabel(type)}`))}
 
                                 <span className="text-neutral-600 font-normal text-sm">/</span>
                                 <span className="text-neutral-500 font-mono text-xs uppercase normal-case tracking-wider font-normal">
                                     {type === 'dashboard'
                                         ? 'Overview'
-                                        : (type === 'post' || type === 'daily' || type === 'moment') && viewMode === 'list' ? 'Library' : (type === 'comment' ? 'Library' : 'Editor')}
+                                        : (type === 'post' || type === 'daily' || type === 'moment' || isHomePageType(type)) && viewMode === 'list' ? 'Library' : (type === 'comment' ? 'Library' : 'Editor')}
                                 </span>
 
                             </h1>
@@ -839,7 +1040,7 @@ export default function AdminPage() {
                                     className="h-7 border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 font-mono text-[9px] uppercase tracking-widest px-3"
                                 >
                                     {viewMode === 'edit' ? <FiList className="mr-2 w-3 h-3" /> : <FiPlus className="mr-2 w-3 h-3" />}
-                                    {viewMode === 'edit' ? 'Library' : `New_${type}`}
+                                    {viewMode === 'edit' ? 'Library' : `New_${getTypeLabel(type)}`}
                                 </Button>
                             )}
                         </div>
@@ -875,9 +1076,9 @@ export default function AdminPage() {
                                                 >
                                                     <div className="flex items-center gap-3 mb-1.5">
                                                         <h3 className="text-sm font-bold text-neutral-200 truncate group-hover:text-white transition-colors">
-                                                            {type === 'daily' ? post.date : (type === 'comment' ? post.content : post.title)}
+                                                            {getListTitle(post, type)}
                                                         </h3>
-                                                        <span className="text-[10px] font-mono text-neutral-500 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800 uppercase tracking-tighter shrink-0">{post.date || post.created_at}</span>
+                                                        <span className="text-[10px] font-mono text-neutral-500 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800 uppercase tracking-tighter shrink-0">{getListMeta(post, type)}</span>
                                                         {type === 'comment' && (
                                                             <span className="text-[9px] font-mono text-green-500/60 bg-green-500/5 px-2 py-0.5 rounded border border-green-500/10 uppercase tracking-tighter shrink-0">
                                                                 @{post.nickname} {post.contact && `(${post.contact})`}
@@ -892,7 +1093,7 @@ export default function AdminPage() {
 
                                                     </div>
                                                     <p className="text-xs text-neutral-500 truncate font-mono">
-                                                        {type === 'post' ? (post.description || '...') : (type === 'comment' ? '' : (post.content ? post.content.substring(0, 60) : '...'))}
+                                                        {getListDescription(post, type)}
                                                     </p>
 
                                                 </div>
@@ -1070,6 +1271,87 @@ export default function AdminPage() {
                                         <div className="space-y-1.5">
                                             <Label htmlFor="moment-content" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Caption</Label>
                                             <Textarea id="moment-content" rows={4} value={momentData.content} onChange={(e) => setMomentData({ ...momentData, content: e.target.value })} className="bg-neutral-900/50 border-neutral-800 min-h-[100px] resize-none leading-normal p-3 text-xs focus:bg-neutral-900 text-neutral-300" />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {type === 'homepage-tool' && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <div className="space-y-1">
+                                                <Label htmlFor="tool-name" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Name</Label>
+                                                <Input id="tool-name" value={toolData.name} onChange={(e) => setToolData({ ...toolData, name: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 text-xs focus:bg-neutral-900 text-white" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor="tool-icon" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Icon</Label>
+                                                <select
+                                                    id="tool-icon"
+                                                    value={toolData.icon}
+                                                    onChange={(e) => setToolData({ ...toolData, icon: e.target.value as HomeToolIcon })}
+                                                    className="h-9 w-full rounded-md border border-neutral-800 bg-neutral-900/50 px-3 text-xs text-neutral-300 outline-none focus:bg-neutral-900"
+                                                >
+                                                    {homeToolIconOptions.map((option) => (
+                                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="tool-desc" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Description</Label>
+                                            <Input id="tool-desc" value={toolData.description} onChange={(e) => setToolData({ ...toolData, description: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 text-xs focus:bg-neutral-900 text-neutral-300" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="tool-link" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Link</Label>
+                                            <Input id="tool-link" value={toolData.link} onChange={(e) => setToolData({ ...toolData, link: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" placeholder="https://..." />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <div className="space-y-1">
+                                                <Label htmlFor="tool-sort" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Sort Order</Label>
+                                                <Input id="tool-sort" type="number" value={toolData.sortOrder} onChange={(e) => setToolData({ ...toolData, sortOrder: Number(e.target.value) })} className="bg-neutral-900/50 border-neutral-800 h-9 text-xs focus:bg-neutral-900 text-white" />
+                                            </div>
+                                            <label htmlFor="tool-enabled" className="mt-5 flex h-9 items-center gap-3 rounded-md border border-neutral-800 bg-neutral-900/40 px-3 text-[10px] uppercase tracking-widest text-neutral-400">
+                                                <input
+                                                    id="tool-enabled"
+                                                    type="checkbox"
+                                                    checked={toolData.enabled}
+                                                    onChange={(e) => setToolData({ ...toolData, enabled: e.target.checked })}
+                                                    className="h-3 w-3 accent-white"
+                                                />
+                                                Enabled
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {type === 'homepage-book' && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="book-title" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Title</Label>
+                                            <Input id="book-title" value={bookData.title} onChange={(e) => setBookData({ ...bookData, title: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 text-xs focus:bg-neutral-900 text-white" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="book-cover" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Cover URL</Label>
+                                            <Input id="book-cover" value={bookData.cover} onChange={(e) => setBookData({ ...bookData, cover: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" placeholder="https://..." />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="book-hover" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Hover Text</Label>
+                                            <Textarea id="book-hover" rows={4} value={bookData.hoverText} onChange={(e) => setBookData({ ...bookData, hoverText: e.target.value })} className="bg-neutral-900/50 border-neutral-800 min-h-[100px] resize-none leading-normal p-3 text-xs focus:bg-neutral-900 text-neutral-300" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <div className="space-y-1">
+                                                <Label htmlFor="book-sort" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Sort Order</Label>
+                                                <Input id="book-sort" type="number" value={bookData.sortOrder} onChange={(e) => setBookData({ ...bookData, sortOrder: Number(e.target.value) })} className="bg-neutral-900/50 border-neutral-800 h-9 text-xs focus:bg-neutral-900 text-white" />
+                                            </div>
+                                            <label htmlFor="book-enabled" className="mt-5 flex h-9 items-center gap-3 rounded-md border border-neutral-800 bg-neutral-900/40 px-3 text-[10px] uppercase tracking-widest text-neutral-400">
+                                                <input
+                                                    id="book-enabled"
+                                                    type="checkbox"
+                                                    checked={bookData.enabled}
+                                                    onChange={(e) => setBookData({ ...bookData, enabled: e.target.checked })}
+                                                    className="h-3 w-3 accent-white"
+                                                />
+                                                Enabled
+                                            </label>
                                         </div>
                                     </div>
                                 )}

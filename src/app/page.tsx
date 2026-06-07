@@ -1,40 +1,57 @@
 import { HeroTitle, HeroSubtitle } from "@/components/hero-title";
-import { FiFileText, FiLayers, FiRefreshCw, FiMapPin, FiMusic, FiCommand, FiBookOpen, FiVideo } from "react-icons/fi";
+import type { IconType } from "react-icons";
+import {
+  FiBookOpen,
+  FiBox,
+  FiCode,
+  FiCommand,
+  FiCpu,
+  FiDatabase,
+  FiDownload,
+  FiExternalLink,
+  FiFileText,
+  FiImage,
+  FiLayers,
+  FiMapPin,
+  FiMusic,
+  FiRefreshCw,
+  FiSettings,
+  FiStar,
+  FiTerminal,
+  FiTool,
+  FiUpload,
+  FiVideo,
+} from "react-icons/fi";
 import Dither from "@/components/dither/Dither";
 import Image from "next/image";
+import { getHomeModules } from "@/lib/home-modules";
+import { HomeToolIcon } from "@/lib/home-module-types";
 
-const tools = [
-  {
-    name: "Project Alpha",
-    description: "示例项目",
-    link: "https://github.com/your-username/project-alpha",
-    icon: <FiFileText className="w-6 h-6" />
-  },
-  {
-    name: "Project Beta",
-    description: "示例项目",
-    link: "https://github.com/your-username/project-beta",
-    icon: <FiLayers className="w-6 h-6" />
-  },
-  {
-    name: "Project Gamma",
-    description: "示例项目",
-    link: "https://github.com/your-username/project-gamma",
-    icon: <FiRefreshCw className="w-6 h-6" />
-  },
-  {
-    name: "Project Delta",
-    description: "示例项目",
-    link: "https://github.com/your-username/project-delta",
-    icon: <FiVideo className="w-6 h-6" />
-  },
-];
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
-const books: {
-  title: string;
-  cover: string;
-  hoverText: string;
-}[] = [];
+const toolIconMap: Record<HomeToolIcon, IconType> = {
+  file: FiFileText,
+  layers: FiLayers,
+  refresh: FiRefreshCw,
+  video: FiVideo,
+  book: FiBookOpen,
+  command: FiCommand,
+  link: FiExternalLink,
+  code: FiCode,
+  terminal: FiTerminal,
+  tool: FiTool,
+  database: FiDatabase,
+  upload: FiUpload,
+  download: FiDownload,
+  image: FiImage,
+  map: FiMapPin,
+  music: FiMusic,
+  box: FiBox,
+  cpu: FiCpu,
+  settings: FiSettings,
+  star: FiStar,
+};
 
 const signalTags = ["BUILD", "WRITE", "PHOTO", "DAILY"];
 
@@ -56,7 +73,9 @@ const hexTag = (seed: number) => {
   return value.toString(16).toUpperCase().padStart(2, '0');
 };
 
-export default function Home() {
+export default async function Home() {
+  const { tools, books } = await getHomeModules();
+
   return (
     <div className="container mx-auto max-w-5xl px-4">
       <div className="dither-background-wrapper">
@@ -107,7 +126,7 @@ export default function Home() {
           <p className="font-press-start text-[10px] leading-relaxed text-center text-white/90 p-4">
             &ldquo;DARKNESS IS BOUNDLESS, YET HUMANITY FOOLISHLY YEARNS FOR LIGHT.&rdquo;
           </p>
-          <div className="text-[10px] text-right text-white/50 font-mono mt-4">— OVERRIDE</div>
+          <div className="text-[10px] text-right text-white/50 font-mono mt-4">- OVERRIDE</div>
         </div>
       </section>
 
@@ -184,41 +203,45 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {tools.map((tool) => (
-              <div
-                key={tool.name}
-                className="group/item relative p-5 transition-all duration-500"
-              >
-                {/* Minimal Corner */}
-                <span className="absolute top-0 right-0 w-1 h-1 bg-white/10 group-hover/item:bg-white/40 transition-colors"></span>
+            {tools.map((tool) => {
+              const ToolIcon = toolIconMap[tool.icon] || FiFileText;
 
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-start justify-between">
-                    <div className="text-white/70 group-hover/item:text-white transition-colors">
-                      {tool.icon}
+              return (
+                <div
+                  key={`${tool.id || tool.name}-${tool.name}`}
+                  className="group/item relative p-5 transition-all duration-500"
+                >
+                  {/* Minimal Corner */}
+                  <span className="absolute top-0 right-0 w-1 h-1 bg-white/10 group-hover/item:bg-white/40 transition-colors"></span>
+
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-start justify-between">
+                      <div className="text-white/70 group-hover/item:text-white transition-colors">
+                        <ToolIcon className="w-6 h-6" />
+                      </div>
+                      <span className="text-[9px] font-mono text-white/40 group-hover/item:text-white/50">
+                        0x{hexTag(tool.name.length + tool.description.length)}
+                      </span>
                     </div>
-                    <span className="text-[9px] font-mono text-white/40 group-hover/item:text-white/50">
-                      0x{hexTag(tool.name.length + tool.description.length)}
-                    </span>
-                  </div>
 
-                  <div>
-                    <h3 className="text-sm font-bold text-white/75 group-hover/item:text-white/95 mb-1 tracking-tight transition-colors">{tool.name}</h3>
-                    <p className="text-[10px] text-white/60 leading-relaxed font-mono uppercase">{tool.description}</p>
-                  </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white/75 group-hover/item:text-white/95 mb-1 tracking-tight transition-colors">{tool.name}</h3>
+                      <p className="text-[10px] text-white/60 leading-relaxed font-mono uppercase">{tool.description}</p>
+                    </div>
 
-                  <a
-                    href={tool.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between text-[10px] font-mono text-white/60 hover:text-white pt-4 mt-2 group/btn"
-                  >
-                    <span>LAUNCH_MODULE</span>
-                    <span className="group-hover/btn:translate-x-1 transition-transform">→</span>
-                  </a>
+                    <a
+                      href={tool.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between text-[10px] font-mono text-white/60 hover:text-white pt-4 mt-2 group/btn"
+                    >
+                      <span>LAUNCH_MODULE</span>
+                      <span className="group-hover/btn:translate-x-1 transition-transform">-&gt;</span>
+                    </a>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -252,9 +275,7 @@ export default function Home() {
               </article>
             ))}
           </div>
-
         </section>
-
       </div>
     </div>
   );
