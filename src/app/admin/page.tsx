@@ -414,6 +414,7 @@ const renderMarkdownPreview = (markdown: string) => {
 
 export default function AdminPage() {
     const postContentRef = useRef<HTMLTextAreaElement | null>(null);
+    const postPreviewRef = useRef<HTMLDivElement | null>(null);
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState(false);
@@ -441,7 +442,7 @@ export default function AdminPage() {
     const [currentFilename, setCurrentFilename] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'edit' | 'list'>('list');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-    const [isHomePageOpen, setIsHomePageOpen] = useState(true);
+    const [isHomePageOpen, setIsHomePageOpen] = useState(false);
 
     // Delete Confirmation State
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -661,6 +662,18 @@ export default function AdminPage() {
 
     const updatePostContent = (content: string) => {
         setPostData(prev => ({ ...prev, content }));
+    };
+
+    const syncPostPreviewScroll = (event: React.UIEvent<HTMLTextAreaElement>) => {
+        const source = event.currentTarget;
+        const preview = postPreviewRef.current;
+        if (!preview) return;
+
+        const sourceScrollable = source.scrollHeight - source.clientHeight;
+        const previewScrollable = preview.scrollHeight - preview.clientHeight;
+        if (sourceScrollable <= 0 || previewScrollable <= 0) return;
+
+        preview.scrollTop = (source.scrollTop / sourceScrollable) * previewScrollable;
     };
 
     const insertPostMarkdown = (before: string, after = '', placeholder = 'text') => {
@@ -1219,13 +1232,15 @@ export default function AdminPage() {
                                                             rows={25}
                                                             value={postData.content}
                                                             onChange={(e) => updatePostContent(e.target.value)}
-                                                            className="flex min-h-[560px] w-full resize-y border-0 bg-neutral-950 p-4 font-mono text-xs leading-relaxed text-neutral-300 outline-none transition-colors placeholder:text-neutral-700 focus:bg-neutral-900/40"
+                                                            onScroll={syncPostPreviewScroll}
+                                                            className="flex h-[560px] w-full resize-none border-0 bg-neutral-950 p-4 font-mono text-xs leading-relaxed text-neutral-300 outline-none transition-colors placeholder:text-neutral-700 focus:bg-neutral-900/40"
                                                         />
                                                     </div>
-                                                    <div className="min-h-[560px] bg-[#111]">
+                                                    <div className="flex h-[602px] flex-col bg-[#111]">
                                                         <div className="border-b border-neutral-900 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.2em] text-neutral-600">Rendered_Preview</div>
                                                         <div
-                                                            className="prose prose-invert max-w-none p-5 text-sm"
+                                                            ref={postPreviewRef}
+                                                            className="prose prose-invert max-w-none flex-1 overflow-y-auto p-5 text-sm"
                                                             dangerouslySetInnerHTML={{ __html: renderMarkdownPreview(postData.content) }}
                                                         />
                                                     </div>
