@@ -75,21 +75,46 @@ type DashboardData = {
     posts: AdminItem[];
     daily: AdminItem[];
     moments: AdminItem[];
+    analytics: AnalyticsSummary;
 };
 
 type ChartRange = '7d' | '30d';
 
-const visitorSeries: Record<ChartRange, number[]> = {
-    '7d': [18, 24, 21, 32, 27, 15, 17],
-    '30d': [6, 9, 7, 12, 15, 10, 18, 22, 19, 16, 28, 24, 31, 35, 29, 25, 20, 26, 33, 38, 34, 41, 37, 44, 39, 31, 27, 25, 18, 17],
+type AnalyticsPoint = {
+    date: string;
+    views: number;
+    visitors: number;
 };
 
-const viewSeries: Record<ChartRange, number[]> = {
-    '7d': [72, 95, 88, 136, 121, 148, 167],
-    '30d': [31, 44, 38, 52, 65, 58, 73, 90, 86, 78, 96, 104, 118, 132, 126, 119, 101, 116, 135, 151, 148, 163, 156, 174, 168, 143, 132, 128, 118, 167],
+type AnalyticsSummary = {
+    totalViews: number;
+    todayViews: number;
+    uniqueVisitors: number;
+    series: Record<ChartRange, AnalyticsPoint[]>;
 };
 
-const totalVisits = 1475;
+const buildEmptyAnalytics = (): AnalyticsSummary => ({
+    totalViews: 0,
+    todayViews: 0,
+    uniqueVisitors: 0,
+    series: {
+        '7d': buildDateRange(7).map((date) => ({ date, views: 0, visitors: 0 })),
+        '30d': buildDateRange(30).map((date) => ({ date, views: 0, visitors: 0 })),
+    },
+});
+
+const buildDateRange = (days: number) => {
+    const dates: string[] = [];
+    const now = new Date();
+
+    for (let offset = days - 1; offset >= 0; offset -= 1) {
+        const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        date.setUTCDate(date.getUTCDate() - offset);
+        dates.push(date.toISOString().slice(0, 10));
+    }
+
+    return dates;
+};
 
 const formatMetric = (value: number) => new Intl.NumberFormat('en-US').format(value);
 
@@ -207,7 +232,7 @@ function DashboardView({
         { label: '文章数', value: postCount, meta: '文章档案', icon: <FiEdit3 className="h-4 w-4" /> },
         { label: '总字数', value: totalWords, meta: 'Markdown 字符', icon: <FiTerminal className="h-4 w-4" /> },
         { label: '总内容数', value: totalContent, meta: '文章 + 日常 + 瞬间', icon: <FiList className="h-4 w-4" /> },
-        { label: '总访问量', value: totalVisits, meta: '今日新增 167 次', icon: <FiTrendingUp className="h-4 w-4" /> },
+        { label: '总访问量', value: data.analytics.totalViews, meta: `今日新增 ${formatMetric(data.analytics.todayViews)} 次`, icon: <FiTrendingUp className="h-4 w-4" /> },
     ];
 
     return (
@@ -233,14 +258,14 @@ function DashboardView({
                     title="访客趋势图"
                     range={visitorRange}
                     onRangeChange={setVisitorRange}
-                    values={visitorSeries[visitorRange]}
+                    values={data.analytics.series[visitorRange].map((point) => point.visitors)}
                     unit="人"
                 />
                 <TrendChart
                     title="访问量趋势图"
                     range={viewRange}
                     onRangeChange={setViewRange}
-                    values={viewSeries[viewRange]}
+                    values={data.analytics.series[viewRange].map((point) => point.views)}
                     unit="次"
                 />
             </div>
@@ -321,7 +346,7 @@ export default function AdminPage() {
     const [dailyData, setDailyData] = useState<DailyData>({ date: today, imageUrl: '', content: '' });
     const [momentData, setMomentData] = useState<MomentData>({ title: '', date: today, imageUrl: '', content: '' });
     const [existingPosts, setExistingPosts] = useState<AdminItem[]>([]);
-    const [dashboardData, setDashboardData] = useState<DashboardData>({ posts: [], daily: [], moments: [] });
+    const [dashboardData, setDashboardData] = useState<DashboardData>({ posts: [], daily: [], moments: [], analytics: buildEmptyAnalytics() });
     const [dashboardLoading, setDashboardLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentFilename, setCurrentFilename] = useState<string | null>(null);
@@ -375,27 +400,32 @@ export default function AdminPage() {
         try {
             const adminKey = token || localStorage.getItem('admin_key') || '';
             setDashboardLoading(true);
-            const [postsRes, dailyRes, momentsRes] = await Promise.all(
-                ['post', 'daily', 'moment'].map((targetType) => fetch(`/api/admin/list?type=${targetType}`, {
+            const [postsRes, dailyRes, momentsRes, analyticsRes] = await Promise.all([
+                ...(['post', 'daily', 'moment'] as const).map((targetType) => fetch(`/api/admin/list?type=${targetType}`, {
                     headers: { 'Authorization': adminKey }
-                }))
-            );
+                })),
+                fetch('/api/admin/analytics', {
+                    headers: { 'Authorization': adminKey }
+                }),
+            ]);
 
-            if ([postsRes, dailyRes, momentsRes].some((res) => res.status === 401)) {
+            if ([postsRes, dailyRes, momentsRes, analyticsRes].some((res) => res.status === 401)) {
                 setIsAuthorized(false);
                 return;
             }
 
-            const [postsData, dailyDataRes, momentsData] = await Promise.all([
+            const [postsData, dailyDataRes, momentsData, analyticsData] = await Promise.all([
                 postsRes.json() as Promise<{ items: AdminItem[] }>,
                 dailyRes.json() as Promise<{ items: AdminItem[] }>,
                 momentsRes.json() as Promise<{ items: AdminItem[] }>,
+                analyticsRes.ok ? analyticsRes.json() as Promise<AnalyticsSummary> : Promise.resolve(buildEmptyAnalytics()),
             ]);
 
             setDashboardData({
                 posts: postsData.items || [],
                 daily: dailyDataRes.items || [],
                 moments: momentsData.items || [],
+                analytics: analyticsData || buildEmptyAnalytics(),
             });
         } catch (error) {
             console.error('Failed to fetch dashboard data', error);
@@ -431,12 +461,22 @@ export default function AdminPage() {
     }, [fetchDashboardData, type]);
 
     useEffect(() => {
-        const key = localStorage.getItem('admin_key');
-        if (key) {
-            setIsAuthorized(true);
-            fetchPosts(key);
-        }
-        setCheckingAuth(false);
+        let cancelled = false;
+
+        queueMicrotask(() => {
+            if (cancelled) return;
+
+            const key = localStorage.getItem('admin_key');
+            if (key) {
+                setIsAuthorized(true);
+                fetchPosts(key);
+            }
+            setCheckingAuth(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
     }, [fetchPosts]);
 
     useEffect(() => {

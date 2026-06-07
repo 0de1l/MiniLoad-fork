@@ -3,9 +3,13 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const runtime = 'edge';
 
+type AuthPayload = {
+    password?: string;
+};
+
 export async function POST(request: Request) {
     try {
-        const { password } = await request.json();
+        const { password } = (await request.json()) as AuthPayload;
         const adminPassword = process.env.ADMIN_PASSWORD || '';
 
         if (password === adminPassword) {

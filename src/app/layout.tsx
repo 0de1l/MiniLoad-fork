@@ -4,6 +4,7 @@ import { Press_Start_2P } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { AnalyticsTracker } from "@/components/analytics-tracker";
 
 const pressStart2P = Press_Start_2P({
   weight: "400",
@@ -84,6 +85,9 @@ export default function RootLayout({
 
         <Suspense fallback={null}>
           <Header />
+        </Suspense>
+        <Suspense fallback={null}>
+          <AnalyticsTracker />
         </Suspense>
         <main className="flex-1 relative z-10">{children}</main>
         <Footer />
