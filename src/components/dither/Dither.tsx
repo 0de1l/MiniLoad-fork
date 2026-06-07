@@ -197,6 +197,7 @@ function DitheredWaves({
     mouseRadius
 }: DitheredWavesProps) {
     const mesh = useRef<THREE.Mesh>(null);
+    const material = useRef<THREE.ShaderMaterial>(null);
     const mouseRef = useRef(new THREE.Vector2());
     const { viewport, size, gl } = useThree();
 
@@ -222,16 +223,20 @@ function DitheredWaves({
 
     /* eslint-disable react-hooks/immutability */
     useFrame(({ clock }) => {
+        const uniforms = material.current?.uniforms ?? waveUniforms;
         if (!disableAnimation) {
-            waveUniforms.time.value = clock.getElapsedTime();
+            uniforms.time.value = clock.getElapsedTime();
         }
-        waveUniforms.waveSpeed.value = waveSpeed;
-        waveUniforms.waveFrequency.value = waveFrequency;
-        waveUniforms.waveAmplitude.value = waveAmplitude;
-        waveUniforms.waveColor.value.set(...waveColor);
-        waveUniforms.enableMouseInteraction.value = enableMouseInteraction ? 1 : 0;
-        waveUniforms.mouseRadius.value = mouseRadius;
-        waveUniforms.mousePos.value.copy(mouseRef.current);
+        uniforms.waveSpeed.value = waveSpeed;
+        uniforms.waveFrequency.value = waveFrequency;
+        uniforms.waveAmplitude.value = waveAmplitude;
+        uniforms.waveColor.value.set(...waveColor);
+        uniforms.enableMouseInteraction.value = enableMouseInteraction ? 1 : 0;
+        uniforms.mouseRadius.value = mouseRadius;
+        uniforms.mousePos.value.copy(mouseRef.current);
+        if (material.current) {
+            material.current.uniformsNeedUpdate = true;
+        }
     });
     /* eslint-enable react-hooks/immutability */
 
@@ -252,6 +257,7 @@ function DitheredWaves({
             <mesh ref={mesh} scale={[viewport.width, viewport.height, 1]}>
                 <planeGeometry args={[1, 1]} />
                 <shaderMaterial
+                    ref={material}
                     vertexShader={waveVertexShader}
                     fragmentShader={waveFragmentShader}
                     uniforms={waveUniforms}
