@@ -22,7 +22,8 @@ import {
     FiBarChart2,
     FiTrendingUp,
     FiBookOpen,
-    FiTool
+    FiTool,
+    FiUpload
 } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
@@ -375,6 +376,7 @@ export default function AdminPage() {
     const [checkingAuth, setCheckingAuth] = useState(true);
     const [type, setType] = useState<AdminType>('dashboard');
     const [loading, setLoading] = useState(false);
+    const [uploadingCover, setUploadingCover] = useState(false);
     const [listLoading, setListLoading] = useState(false);
     const [message, setMessage] = useState<StatusMessage | null>(null);
 
@@ -737,6 +739,50 @@ export default function AdminPage() {
             setMessage({ text: 'NETWORK ERROR: CONNECTION LOST', isError: true });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleBookCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setUploadingCover(true);
+        setMessage(null);
+
+        try {
+            const adminKey = localStorage.getItem('admin_key') || '';
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('folder', 'books');
+
+            const res = await fetch('/api/admin/upload', {
+                method: 'POST',
+                headers: { 'Authorization': adminKey },
+                body: formData,
+            });
+
+            if (res.status === 401) {
+                localStorage.removeItem('admin_key');
+                setIsAuthorized(false);
+                setMessage({ text: 'PERMISSION_DENIED: AUTH_EXPIRED', isError: true });
+                return;
+            }
+
+            const result = await res.json() as { success?: boolean; url?: string; error?: string };
+            if (!res.ok || !result.success || !result.url) {
+                setMessage({ text: `ERROR: ${result.error || 'Upload failed'}`, isError: true });
+                return;
+            }
+
+            setBookData((current) => ({ ...current, cover: result.url || current.cover }));
+            setMessage({ text: 'SUCCESS: COVER_UPLOADED', isError: false });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error) {
+            console.error('Cover upload error:', error);
+            setMessage({ text: 'NETWORK ERROR: UPLOAD_FAILED', isError: true });
+        } finally {
+            setUploadingCover(false);
         }
     };
 
@@ -1323,7 +1369,21 @@ export default function AdminPage() {
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="book-cover" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Cover URL</Label>
-                                            <Input id="book-cover" value={bookData.cover} onChange={(e) => setBookData({ ...bookData, cover: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" placeholder="https://..." />
+                                            <div className="flex flex-col gap-2 md:flex-row">
+                                                <Input id="book-cover" value={bookData.cover} onChange={(e) => setBookData({ ...bookData, cover: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" placeholder="https://..." />
+                                                <label className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 font-mono text-[9px] uppercase tracking-widest text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white">
+                                                    <FiUpload className="h-3 w-3" />
+                                                    {uploadingCover ? 'Uploading...' : 'Upload'}
+                                                    <input
+                                                        type="file"
+                                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                                        onChange={handleBookCoverUpload}
+                                                        disabled={uploadingCover}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            </div>
+                                            <p className="px-0.5 font-mono text-[9px] uppercase tracking-widest text-neutral-700">R2 upload limit: 8MB / JPG PNG WEBP GIF</p>
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="book-hover" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Hover Text</Label>
