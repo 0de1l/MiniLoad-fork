@@ -185,6 +185,8 @@ const createDefaultBookData = (): BookData => ({
     enabled: true,
 });
 
+type UploadFolder = 'posts' | 'daily' | 'moments' | 'books';
+
 const sidebarMotion = 'duration-500 ease-[cubic-bezier(.22,1,.36,1)]';
 const navItemMotion = `transition-[background-color,border-color,color,padding,transform] ${sidebarMotion}`;
 const sidebarTextMotion = `overflow-hidden whitespace-nowrap transition-[opacity,transform,max-width] ${sidebarMotion}`;
@@ -376,6 +378,9 @@ export default function AdminPage() {
     const [checkingAuth, setCheckingAuth] = useState(true);
     const [type, setType] = useState<AdminType>('dashboard');
     const [loading, setLoading] = useState(false);
+    const [uploadingPostImage, setUploadingPostImage] = useState(false);
+    const [uploadingDailyImage, setUploadingDailyImage] = useState(false);
+    const [uploadingMomentImage, setUploadingMomentImage] = useState(false);
     const [uploadingCover, setUploadingCover] = useState(false);
     const [listLoading, setListLoading] = useState(false);
     const [message, setMessage] = useState<StatusMessage | null>(null);
@@ -742,6 +747,103 @@ export default function AdminPage() {
         }
     };
 
+    const uploadImageAsset = async (file: File, folder: UploadFolder) => {
+        const adminKey = localStorage.getItem('admin_key') || '';
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('folder', folder);
+
+        const res = await fetch('/api/admin/upload', {
+            method: 'POST',
+            headers: { 'Authorization': adminKey },
+            body: formData,
+        });
+
+        if (res.status === 401) {
+            localStorage.removeItem('admin_key');
+            setIsAuthorized(false);
+            setMessage({ text: 'PERMISSION_DENIED: AUTH_EXPIRED', isError: true });
+            return null;
+        }
+
+        const result = await res.json() as { success?: boolean; url?: string; error?: string };
+        if (!res.ok || !result.success || !result.url) {
+            setMessage({ text: `ERROR: ${result.error || 'Upload failed'}`, isError: true });
+            return null;
+        }
+
+        return result.url;
+    };
+
+    const handlePostImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setUploadingPostImage(true);
+        setMessage(null);
+
+        try {
+            const url = await uploadImageAsset(file, 'posts');
+            if (!url) return;
+
+            insertPostMarkdown('![', `](${url})`, file.name.replace(/\.[^.]+$/, '') || 'image');
+            setMessage({ text: 'SUCCESS: IMAGE_INSERTED', isError: false });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error) {
+            console.error('Post image upload error:', error);
+            setMessage({ text: 'NETWORK ERROR: UPLOAD_FAILED', isError: true });
+        } finally {
+            setUploadingPostImage(false);
+        }
+    };
+
+    const handleDailyImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setUploadingDailyImage(true);
+        setMessage(null);
+
+        try {
+            const url = await uploadImageAsset(file, 'daily');
+            if (!url) return;
+
+            setDailyData((current) => ({ ...current, imageUrl: url }));
+            setMessage({ text: 'SUCCESS: IMAGE_UPLOADED', isError: false });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error) {
+            console.error('Daily image upload error:', error);
+            setMessage({ text: 'NETWORK ERROR: UPLOAD_FAILED', isError: true });
+        } finally {
+            setUploadingDailyImage(false);
+        }
+    };
+
+    const handleMomentImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setUploadingMomentImage(true);
+        setMessage(null);
+
+        try {
+            const url = await uploadImageAsset(file, 'moments');
+            if (!url) return;
+
+            setMomentData((current) => ({ ...current, imageUrl: url }));
+            setMessage({ text: 'SUCCESS: IMAGE_UPLOADED', isError: false });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error) {
+            console.error('Moment image upload error:', error);
+            setMessage({ text: 'NETWORK ERROR: UPLOAD_FAILED', isError: true });
+        } finally {
+            setUploadingMomentImage(false);
+        }
+    };
+
     const handleBookCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         event.target.value = '';
@@ -751,31 +853,10 @@ export default function AdminPage() {
         setMessage(null);
 
         try {
-            const adminKey = localStorage.getItem('admin_key') || '';
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('folder', 'books');
+            const url = await uploadImageAsset(file, 'books');
+            if (!url) return;
 
-            const res = await fetch('/api/admin/upload', {
-                method: 'POST',
-                headers: { 'Authorization': adminKey },
-                body: formData,
-            });
-
-            if (res.status === 401) {
-                localStorage.removeItem('admin_key');
-                setIsAuthorized(false);
-                setMessage({ text: 'PERMISSION_DENIED: AUTH_EXPIRED', isError: true });
-                return;
-            }
-
-            const result = await res.json() as { success?: boolean; url?: string; error?: string };
-            if (!res.ok || !result.success || !result.url) {
-                setMessage({ text: `ERROR: ${result.error || 'Upload failed'}`, isError: true });
-                return;
-            }
-
-            setBookData((current) => ({ ...current, cover: result.url || current.cover }));
+            setBookData((current) => ({ ...current, cover: url }));
             setMessage({ text: 'SUCCESS: COVER_UPLOADED', isError: false });
             setTimeout(() => setMessage(null), 3000);
         } catch (error) {
@@ -1241,6 +1322,17 @@ export default function AdminPage() {
                                                     <button type="button" onClick={() => insertPostMarkdown('> ', '', '引用 / 摘录')} className="h-7 rounded-md border border-neutral-800 px-2 font-mono text-[10px] text-neutral-300 hover:border-neutral-600 hover:text-white">QUOTE</button>
                                                     <button type="button" onClick={() => insertPostMarkdown('[', '](https://)', 'link text')} className="h-7 rounded-md border border-neutral-800 px-2 font-mono text-[10px] text-neutral-300 hover:border-neutral-600 hover:text-white">LINK</button>
                                                     <button type="button" onClick={() => insertPostMarkdown('![', '](https://)', 'image alt')} className="h-7 rounded-md border border-neutral-800 px-2 font-mono text-[10px] text-neutral-300 hover:border-neutral-600 hover:text-white">IMG</button>
+                                                    <label className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border border-neutral-800 px-2 font-mono text-[10px] text-neutral-300 hover:border-neutral-600 hover:text-white">
+                                                        <FiUpload className="h-3 w-3" />
+                                                        {uploadingPostImage ? 'UPLOADING' : 'UPLOAD IMG'}
+                                                        <input
+                                                            type="file"
+                                                            accept="image/jpeg,image/png,image/webp,image/gif"
+                                                            onChange={handlePostImageUpload}
+                                                            disabled={uploadingPostImage}
+                                                            className="hidden"
+                                                        />
+                                                    </label>
                                                     <button type="button" onClick={() => insertPostMarkdown('`', '`', 'code')} className="h-7 rounded-md border border-neutral-800 px-2 font-mono text-[10px] text-neutral-300 hover:border-neutral-600 hover:text-white">CODE</button>
                                                     <button type="button" onClick={() => insertPostMarkdown('- ', '', 'list item')} className="h-7 rounded-md border border-neutral-800 px-2 font-mono text-[10px] text-neutral-300 hover:border-neutral-600 hover:text-white">LIST</button>
                                                     <button type="button" onClick={() => insertPostMarkdown('```\n', '\n```', 'code block')} className="h-7 rounded-md border border-neutral-800 px-2 font-mono text-[10px] text-neutral-300 hover:border-neutral-600 hover:text-white">BLOCK</button>
@@ -1281,7 +1373,20 @@ export default function AdminPage() {
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="daily-url" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Image URL (Optional)</Label>
-                                            <Input id="daily-url" value={dailyData.imageUrl} onChange={(e) => setDailyData({ ...dailyData, imageUrl: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" placeholder="https://..." />
+                                            <div className="flex flex-col gap-2 md:flex-row">
+                                                <Input id="daily-url" value={dailyData.imageUrl} onChange={(e) => setDailyData({ ...dailyData, imageUrl: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" placeholder="https://..." />
+                                                <label className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 font-mono text-[9px] uppercase tracking-widest text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white">
+                                                    <FiUpload className="h-3 w-3" />
+                                                    {uploadingDailyImage ? 'Uploading...' : 'Upload'}
+                                                    <input
+                                                        type="file"
+                                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                                        onChange={handleDailyImageUpload}
+                                                        disabled={uploadingDailyImage}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            </div>
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="daily-content" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Log</Label>
@@ -1304,7 +1409,20 @@ export default function AdminPage() {
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="moment-url" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Image URL</Label>
-                                            <Input id="moment-url" value={momentData.imageUrl} onChange={(e) => setMomentData({ ...momentData, imageUrl: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" />
+                                            <div className="flex flex-col gap-2 md:flex-row">
+                                                <Input id="moment-url" value={momentData.imageUrl} onChange={(e) => setMomentData({ ...momentData, imageUrl: e.target.value })} className="bg-neutral-900/50 border-neutral-800 h-9 font-mono text-[10px] text-neutral-400 focus:bg-neutral-900" placeholder="https://..." />
+                                                <label className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 font-mono text-[9px] uppercase tracking-widest text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white">
+                                                    <FiUpload className="h-3 w-3" />
+                                                    {uploadingMomentImage ? 'Uploading...' : 'Upload'}
+                                                    <input
+                                                        type="file"
+                                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                                        onChange={handleMomentImageUpload}
+                                                        disabled={uploadingMomentImage}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            </div>
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="moment-content" className="text-[10px] text-neutral-500 font-semibold px-0.5 uppercase tracking-wider">Caption</Label>
