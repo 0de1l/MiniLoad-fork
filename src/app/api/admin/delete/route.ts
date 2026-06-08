@@ -1,5 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import {
+    getAdminPassword,
+    getAnalyticsDb,
+    getRuntimeEnv,
+} from '@/lib/analytics';
+import {
+    AssetCleanupResult,
+    deleteUnusedAssetKeys,
+    extractAssetKeysFromRecord,
+    getR2AssetsBucket,
+} from '@/lib/r2-assets';
 
 type AdminType = 'post' | 'daily' | 'moment' | 'comment';
 
@@ -8,21 +18,12 @@ export const runtime = 'edge';
 
 export async function DELETE(request: Request) {
     const isNode = typeof process.versions?.node !== 'undefined';
-    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-    let db: any = null;
-
-    if (!isNode) {
-        try {
-            const { env } = getRequestContext();
-            db = (env as any).DB;
-        } catch (e) {
-            console.error('Failed to get D1 binding:', e);
-        }
-    }
+    const env = getRuntimeEnv();
+    const db = getAnalyticsDb(env);
 
     try {
         const authHeader = request.headers.get('Authorization');
-        const adminPassword = process.env.ADMIN_PASSWORD || '';
+        const adminPassword = getAdminPassword(env);
 
         if (authHeader !== adminPassword) {
             const res = NextResponse.json({ error: 'Unauthorized: Invalid security key' }, { status: 401 });
@@ -54,14 +55,23 @@ export async function DELETE(request: Request) {
             }
         }
 
+        let cleanupCandidates: string[] = [];
+        let assetCleanup: AssetCleanupResult | null = null;
+
         // --- 数据库操作 ---
         if (db) {
             if (type === 'post') {
                 const slug = filename.replace('.md', '');
+                const target = await db.prepare('SELECT content FROM posts WHERE slug = ?').bind(slug).first<Record<string, unknown>>();
+                cleanupCandidates = extractAssetKeysFromRecord(target);
                 await db.prepare('DELETE FROM posts WHERE slug = ?').bind(slug).run();
             } else if (type === 'daily') {
+                const target = await db.prepare('SELECT content, image_url FROM daily WHERE filename = ?').bind(filename).first<Record<string, unknown>>();
+                cleanupCandidates = extractAssetKeysFromRecord(target);
                 await db.prepare('DELETE FROM daily WHERE filename = ?').bind(filename).run();
             } else if (type === 'moment') {
+                const target = await db.prepare('SELECT content, image_url FROM moments WHERE filename = ?').bind(filename).first<Record<string, unknown>>();
+                cleanupCandidates = extractAssetKeysFromRecord(target);
                 await db.prepare('DELETE FROM moments WHERE filename = ?').bind(filename).run();
             } else if (type === 'comment') {
                 console.log('Attempting to delete comment with identifier:', filename);
@@ -77,9 +87,13 @@ export async function DELETE(request: Request) {
                     console.error('Failed to parse comment filename for deletion (invalid parts count):', filename);
                 }
             }
+
+            if (cleanupCandidates.length) {
+                assetCleanup = await deleteUnusedAssetKeys(cleanupCandidates, db, getR2AssetsBucket());
+            }
         }
 
-        const res = NextResponse.json({ success: true });
+        const res = NextResponse.json({ success: true, assetCleanup });
         res.headers.set('Cache-Control', 'no-store');
         return res;
 

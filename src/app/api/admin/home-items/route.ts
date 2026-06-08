@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
     deleteHomeItem,
+    ensureHomeModuleSchema,
     getHomeDb,
     getHomeModules,
     saveHomeBook,
     saveHomeTool,
 } from '@/lib/home-modules';
 import { getAdminPassword, getRuntimeEnv } from '@/lib/analytics';
+import {
+    deleteUnusedAssetKeys,
+    extractAssetKeysFromRecord,
+    getR2AssetsBucket,
+} from '@/lib/r2-assets';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'edge';
@@ -81,9 +87,20 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
+    await ensureHomeModuleSchema(db);
+
+    const target = type === 'book'
+        ? await db.prepare('SELECT cover FROM home_books WHERE id = ?').bind(id).first<Record<string, unknown>>()
+        : null;
+    const cleanupCandidates = extractAssetKeysFromRecord(target);
+
     await deleteHomeItem(db, type, id);
 
-    const response = NextResponse.json({ success: true });
+    const assetCleanup = cleanupCandidates.length
+        ? await deleteUnusedAssetKeys(cleanupCandidates, db, getR2AssetsBucket())
+        : null;
+
+    const response = NextResponse.json({ success: true, assetCleanup });
     response.headers.set('Cache-Control', 'no-store');
     return response;
 }
