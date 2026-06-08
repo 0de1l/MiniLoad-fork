@@ -17,8 +17,8 @@ type R2BucketBinding = {
 };
 
 function getAssetsBucket(): R2BucketBinding | null {
-    const env = getRuntimeEnv() as { ASSETS?: R2BucketBinding };
-    return env.ASSETS ?? null;
+    const env = getRuntimeEnv() as { R2_ASSETS?: R2BucketBinding };
+    return env.R2_ASSETS ?? null;
 }
 
 export async function GET(
@@ -27,7 +27,7 @@ export async function GET(
 ) {
     const bucket = getAssetsBucket();
     if (!bucket) {
-        return NextResponse.json({ error: 'R2 binding ASSETS is not available' }, { status: 500 });
+        return NextResponse.json({ error: 'R2 binding R2_ASSETS is not available' }, { status: 500 });
     }
 
     const { key: parts } = await context.params;
